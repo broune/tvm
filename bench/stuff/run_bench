@@ -1,0 +1,22 @@
+#!/bin/bash
+set -e -x
+
+TVM_DIR=~/tvm
+BENCH_DIR=/tmp/bench
+REV=HEAD
+
+
+mkdir -p "$BENCH_DIR"
+cp ~/bench/run_build.sh "$BENCH_DIR"/
+chmod +x "$BENCH_DIR/run_build.sh"
+
+cd "$TVM_DIR/"
+#git archive --format=tar.gz -o "$BENCH_DIR/tvm.tar.gz" --prefix=tvm/ $REV
+git-archive-all --prefix=tvm/ "$BENCH_DIR/tvm.tar.gz" # not actually gzipped
+
+docker run --rm --mount type=bind,source="$BENCH_DIR",target=/bench tvmai/ci-cpu:latest bash /bench/run_build.sh
+
+ls -lhs "$BENCH_DIR"
+echo
+echo "compile time:"
+cat "$BENCH_DIR/compile_time"
