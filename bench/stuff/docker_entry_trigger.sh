@@ -1,19 +1,24 @@
 #!/bin/bash
 set -e
 
-# We need the ability to specify apache/neo-ai TVM
-git clone --recursive https://github.com/neo-ai/tvm.git
-cd tvm
-# The patch needs to come from outside. Each patch file is basically a git stash. We need this to be mounted inside the docker.
-git apply patches/*
-#What happens if we need to recompile tvm ? Maybe add a random directory inside build ?
-mkdir build && cd build
+# We are only using a bash script here because git does not have a reliable python sdk.
+GIT=https://github.com/neo-ai/tvm.git
+REV=HEAD
+git clone --recursive $GIT /tvm 2>&1| tee /op/git.log
+cd /tvm
+git reset --hard $REV 2>&1| tee -a /op/git.log
+#Patch files correspond to git stashes.
+if test "$(ls /patches/)"; then
+	git apply /patches/* 2>&1| tee -a /op/git.log	
+fi
 
+#What happens if we need to recompile tvm ? Maybe add a random directory inside build ?
+mkdir -p /op/build && cd /op/build
 # Technically we want to let the user specify these options. copy their own config.cmake file ?
-cp ../cmake/config.cmake .
+cp /tvm/cmake/config.cmake .
 echo "set(USE_LLVM ON)" >> config.cmake
 echo "set(USE_ANTLR ON)" >> config.cmake
 echo "set(CMAKE_CXX_FLAGS -Werror)" >> config.cmake
-cmake ..
+cmake /tvm 2>&1| tee cmake.log			
 
-python3 docker_entry.py
+python3 /code/stuff/docker_entry.py
