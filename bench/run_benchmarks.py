@@ -1,5 +1,6 @@
 from collections import namedtuple
 import typing
+import tempfile
 
 # Initial draft proposal for steps to be taken.
 #
@@ -12,97 +13,64 @@ import typing
 # system that already does this that we could use.
 
 
-@dataclass
 class BuildConfig:
-    # Path or URL to the git repository to get TVM from.
-    git_repo: string
+    def __init__(self, git_repo, git_revision, docker, runner, runner_params):
+        """
+        # Path or URL to the git repository to get TVM from.
+        git_repo: string
 
-    # The git revision to compile.
-    git_revision: str
+        # The git revision to compile.
+        git_revision: str
 
-    # The docker image to compile inside of.
-    docker: str
+        # The docker image to compile inside of.
+        docker: str
 
-    # Path or URL of a runner (be it a script or binary) to run inside the
-    # container to build TVM.
-    runner: str
+        # Path or URL of a runner (be it a script or binary) to run inside the
+        # container to build TVM.
+        runner: str
 
-    # The command line parameter(s) to pass to the runner.
-    runner_params: str
+        # The command line parameter(s) to pass to the runner.
+        runner_params: str
+        """
+        self.git_repo=git_repo
+        self.git_revision=git_revision
+        self.docker=docker
+        self.runner=runner
+        self.runner_params=runner_params
 
 
-@dataclass
 class BuildResult:
-    # The config that was used to produce this result.
-    config: BuildConfig
-    
-    # Path or URL to tar.gz file with binaries produced from building TVM.
-    binaries: str
+    def __init__(self, config, binaries, logs, metrics):
+        """
+        # The config that was used to produce this result.
+        config: BuildConfig
+        
+        # Path or URL to tar.gz file with binaries produced from building TVM.
+        binaries: str
 
-    # Path or URL to file containing logs produced from building TVM.
-    logs: str
+        # Path or URL to file containing logs produced from building TVM.
+        logs: str
 
-    # Path or URL to file containing metrics produced from building TVM.
-    metrics: str
+        # Path or URL to file containing metrics produced from building TVM.
+        metrics: str
+        """
+        self.config = config
+        self.binaries = binaries
+        self.logs = logs
+        self.metrics = metrics
+
 
 
 def build_tvm(tvm_build_config : TVMBuildConfig):
     """Compiles TVM."""
     # TODO: Build TVM.
+    root_dir = tempfile.mkdtemp()
+    tvm_dir = os.path.join(root_dir, "tvm")
+    os.system("git clone --recursive {} {}".format(tvm_build_config.git_repo, tvm_dir))
+    os.chdir(tvm_dir)
+    os.system("git checkout {}".format(tvm_build_config.git_revision))
+
     return TVMBuildResult(binaries = "foo/bar/baz.tar.gz")
-
-
-@dataclass
-class BenchmarkConfig:
-    # The name of the benchmark.
-    name: str
-
-    # The docker image to run the benchmark inside of.
-    docker: str
-
-    # Input files that will be made available inside of the container. The key
-    # is the path or URL of a file and the value is the relative path inside of
-    # the container that the file will be available at. These files will be
-    # read-only.
-    input_files: typing.Dict[str, str]
-
-    # Path or URL of a runner (be it a script or binary) to run inside the
-    # container to run the benchmark.
-    runner: str
-
-    # The command line parameter(s) to pass to the runner.
-    runner_params: str
-
-
-@dataclass
-class BenchmarkResult:
-    # The config that was used to produce this result.
-    config : BenchmarkConfig
-    
-    # Path or URL to file containing logs produced from running the benchmark.
-    logs: str
-
-    # Path or URL to file containing metrics produced from running the benchmark.
-    metrics: str
-
-
-def run_benchmark(benchmark_config : BenchmarkConfig):
-    # TODO: run the benchmark
-    return BenchmarkResult(metrics = "foo/bar/baz.json")
-
-
-@dataclass
-class BenchmarkResultSet:
-    # The build result for building TVM.
-    build_result : BuildResult
-
-    # The results of running the benchmarks.
-    benchmark_result : typing.List[BenchmarkResult]
-
-
-def compare_benchmarks(baseline : BenchmarkResultSet, result_sets : typing.List[BenchmarkResultSet], metrics : typing.List[str]):
-    # TODO: show a comparison of base and result_sets across the given named metrics.
-    pass
 
 
 def run_main():
