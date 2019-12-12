@@ -1,7 +1,8 @@
 from collections import namedtuple
 import typing
-import tempfile
-
+import tempfile, os, time, docker, datetime
+from functools import partial
+from multiprocessing import cpu_count as ncpu
 # Initial draft proposal for steps to be taken.
 #
 # TODO: This all assumes that we are running TVM, but we also want to be able
@@ -14,7 +15,7 @@ import tempfile
 
 
 class BuildConfig:
-    def __init__(self, git_repo, git_revision, docker, runner, runner_params):
+    def __init__(self, git_repo, git_revision, docker, runner=os.path.abspath("build_tvm.sh"), runner_params=""):
         """
         # Path or URL to the git repository to get TVM from.
         git_repo: string
@@ -61,23 +62,43 @@ class BuildResult:
 
 
 
-def build_tvm(tvm_build_config : TVMBuildConfig):
-    """Compiles TVM."""
-    # TODO: Build TVM.
-    root_dir = tempfile.mkdtemp()
-    tvm_dir = os.path.join(root_dir, "tvm")
-    os.system("git clone --recursive {} {}".format(tvm_build_config.git_repo, tvm_dir))
-    os.chdir(tvm_dir)
-    os.system("git checkout {}".format(tvm_build_config.git_revision))
+def build_tvm(tvm_build_config : BuildConfig):
+    """
+    Compiles TVM.
+    We are assuming this runs inside a docker.
+    """
+    client = docker.DockerClient(timeout=3600)
+    runner = os.path.join("/runner", os.path.basename(tvm_build_config.runner))
+    docker_output_path = "/op"
+    root_dir = os.path.abspath('./tvm_builds/')
+    if not os.path.exists(root_dir):
+        os.mkdir(root_dir)
+    local_output_path = tempfile.mkdtemp(dir = root_dir)
+    runner_cmd = " ".join([runner,docker_output_path, tvm_build_config.git_repo, tvm_build_config.git_revision, str(ncpu()),
+                                         tvm_build_config.runner_params])
+    container = client.containers.run(image=tvm_build_config.docker, 
+                                        mounts=[docker.types.Mount(runner, tvm_build_config.runner, 'bind', True),
+                                                docker.types.Mount(docker_output_path, local_output_path, 'bind', False),],
+                                        command = runner_cmd,
+                                        auto_remove=True)
+    return BuildResult(config = tvm_build_config,
+                            binaries = None,        #Need to figure out why just pointing to the build directory is not good enough.
+                            logs = None,
+                            metrics = None)
 
-    return TVMBuildResult(binaries = "foo/bar/baz.tar.gz")
+NeoBuildConfig = partial(BuildConfig, 'https://github.com/neo-ai/tvm.git')
+NeoLatestBuildConfig = partial(NeoBuildConfig, 'HEAD')
+NeoLatestCpuBuildConfig = partial(NeoLatestBuildConfig, 'tvmai/ci-cpu:latest')
+ApacheBuildConfig = partial(BuildConfig, 'https://github.com/apache/incubator-tvm.git')
+ApacheLatestBuildConfig = partial(ApacheBuildConfig, 'HEAD')
+ApacheLatestCpuBuildConfig = partial(ApacheLatestBuildConfig, 'tvmai/ci-cpu:latest')
 
 
 def run_main():
     # TODO: System for gathering available benchmarks and using the command
     # line and the local TVM to figure out which of them to run.
 
-    build_config = BuildConfig()
+    build_config = NeoLatestCpuBuildConfig()
     build_result = build_tvm(build_config)
 
     benchmark_config = BenchmarkConfig()
@@ -88,5 +109,5 @@ def run_main():
                        ["tvm_build_time", "model_compile_time", "run_time", "code size"])
 
     
-if name == "__main__":
+if __name__ == "__main__":
     run_main()
