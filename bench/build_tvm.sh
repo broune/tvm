@@ -1,26 +1,33 @@
 #!/bin/bash
 set -e
 
-OUTPUT_DIR=$1
+ROOT_DIR=$1
 GIT=$2
 REV=$3
-GIT_LOG=$OUTPUT_DIR/git.log
-mkdir -p $OUTPUT_DIR
+NPROC=$4
+
+#mkdir -p $ROOT_DIR
+cd $ROOT_DIR
+LOG_DIR=$ROOT_DIR/logs
+mkdir $LOG_DIR
+GIT_LOG=$LOG_DIR/git.log
+MAKE_LOG=$LOG_DIR/make.log
+TVM_DIR=$ROOT_DIR/tvm
+
 START_TIME=$(python -c "import time; print(time.time())")
-git clone --recursive $GIT /tvm 2>&1| tee $GIT_LOG
-cd /tvm
+git clone --recursive $GIT $TVM_DIR 2>&1| tee $GIT_LOG
+cd $TVM_DIR
 git reset --hard $REV 2>&1| tee -a $GIT_LOG
 python -c "import time,datetime; print(datetime.timedelta(seconds=time.time()-$START_TIME))" >> $GIT_LOG
-cd $OUTPUT_DIR
-cp /tvm/cmake/config.cmake .
+BUILD_DIR=$TVM_DIR/build
+mkdir $BUILD_DIR
+cd $BUILD_DIR
+cp $TVM_DIR/cmake/config.cmake $BUILD_DIR
 
-#echo "set(USE_LLVM ON)" >> config.cmake
-#echo "set(USE_ANTLR ON)" >> config.cmake
-#echo "set(CMAKE_CXX_FLAGS -Werror)" >> config.cmake
+echo "set(USE_LLVM ON)" >> config.cmake
+echo "set(USE_ANTLR ON)" >> config.cmake
+echo "set(CMAKE_CXX_FLAGS -Werror)" >> config.cmake
 START_TIME=$(python -c "import time; print(time.time())")
-cmake /tvm 2>&1| tee cmake.log
-make -j $4 2>&1| tee make.log
-python -c "import time,datetime; print(datetime.timedelta(seconds=time.time()-$START_TIME))" >> make.log
-mkdir -p export/
-cp *.log export/
-cp *.so export/
+cmake $TVM_DIR 2>&1| tee $LOG_DIR/cmake.log
+make -j $NPROC 2>&1| tee $MAKE_LOG
+python -c "import time,datetime; print(datetime.timedelta(seconds=time.time()-$START_TIME))" >> $MAKE_LOG
